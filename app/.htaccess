@@ -1,0 +1,45 @@
+# Force HTTPS. Most hosts issue a free SSL certificate on every hosting
+# package. Checks both %{HTTPS} and X-Forwarded-Proto, since some hosts
+# terminate SSL at a proxy/load balancer in front of your actual server -
+# in that setup %{HTTPS} always reads "off" even when the visitor's
+# connection genuinely is HTTPS, and redirecting on %{HTTPS} alone loops
+# forever (redirect to HTTPS -> proxy forwards as HTTP again -> redirect
+# again). If you still get a redirect loop after this, check that a valid
+# SSL certificate is actually issued and active for your domain.
+RewriteEngine On
+RewriteCond %{HTTPS} off
+RewriteCond %{HTTP:X-Forwarded-Proto} !https
+RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# Never let search engines index this.
+Header set X-Robots-Tag "noindex, nofollow"
+Header set X-Content-Type-Options "nosniff"
+Header set X-Frame-Options "DENY"
+Header set Referrer-Policy "same-origin"
+
+# The includes/ and assets source folders should never be requested
+# directly - PHP already require()s what it needs, and assets/ only needs
+# to serve .css and .js.
+<IfModule mod_rewrite.c>
+  RewriteRule ^includes/ - [F,L]
+</IfModule>
+
+# Block anything that isn't css/js/svg inside assets/, and block dotfiles
+# and config/setup files everywhere, in case they're ever uploaded to the
+# wrong place.
+<FilesMatch "\.(sql|md|example\.php)$">
+  Require all denied
+</FilesMatch>
+<FilesMatch "^\.">
+  Require all denied
+</FilesMatch>
+
+# Belt and braces: config.php is meant to live one level above this
+# folder, never in it, so this should never match anything. If it ever
+# does end up in here by mistake, block it outright rather than relying
+# on that placement alone.
+<Files "config.php">
+  Require all denied
+</Files>
+
+Options -Indexes
